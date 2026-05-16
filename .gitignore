@@ -11,3 +11,6 @@ wheels/
 
 # keep large datasets out of git
 /data/
+
+# Generated index files
+cache/
