@@ -18,6 +18,9 @@ def main() -> None:
 
     search_parser = subparsers.add_parser("search", help="Search movies using BM25")
     search_parser.add_argument("query", type=str, help="Search query")
+    search_parser = subparsers.add_parser("tf")
+    search_parser.add_argument("doc_id", type=str, help="Enter document id")
+    search_parser.add_argument("term", type=str, help="Enter search term")
     search_parser = subparsers.add_parser("build")
 
     args = parser.parse_args()
@@ -36,30 +39,38 @@ def main() -> None:
         def __init__(self):
             self.index = {}
             self.docmap = {}
-            self.term_frequencies = Counter()
-        
-        def __add_document(self, doc_id, text):
-            searchTerm = ''
-            for n in text:
-                if n.isalnum() or n == " ":
-                    searchTerm += n
+            self.term_frequencies = {}
+            self.stemmer = PorterStemmer()
 
-            tokenize = searchTerm.split()
+        def __tokenize(self, text):
+            search_term = ''
+            for char in text:
+                if char.isalnum() or char == " ":
+                    search_term += char
+                else:
+                    search_term += " "
+
+            tokens = search_term.split()
+            return [self.stemmer.stem(token.lower()) for token in tokens]
+         
+        def __add_document(self, doc_id, text):
+            tokenize = self.__tokenize(text)
 
             for token in tokenize:
-                token = token.lower()
                 if token not in self.index:
                     self.index[token] = set()
-                else: 
-                    self.index[token].add(doc_id)
-                if token not in self.term_frequencies: # stoping here
-                    self.term_frequencies[doc_id] = set()
-                else:
-                    self.term_frequencies[doc_id] += 1
+                self.index[token].add(doc_id)
+                if doc_id not in self.term_frequencies:
+                    self.term_frequencies[doc_id] = Counter()
+                self.term_frequencies[doc_id][token] += 1
         
         def get_documents(self, term):
-            term = term.lower()
-            ids = sorted(self.index.get(term, set()))
+            tokenize = self.__tokenize(term)
+            if len(tokenize) > 1:
+                raise ValueError("Expected a single token, got multiple")
+            if len(tokenize) == 0:
+                return []
+            ids = sorted(self.index.get(tokenize[0], set()))
             return ids
 
         def build(self):
@@ -68,7 +79,7 @@ def main() -> None:
 
             for key, value in data.items():
                 for i, m in enumerate(value, start=1):
-                    self.__add_document(i,f"{m['title']} {m['description']}")
+                    self.__add_document(i, f"{m['title']} {m['description']}")
                     if i not in self.docmap:
                         self.docmap[i] = m
         def save(self):
@@ -100,7 +111,19 @@ def main() -> None:
                         self.term_frequencies = term_frequencies
                     else: 
                         raise FileNotFoundError 
-                
+        def get_tf(self, doc_id, term):
+            tokenize = self.__tokenize(term)
+
+            if len(tokenize) > 1:
+                raise ValueError("Expected a single token, got multiple")
+            if len(tokenize) == 0:
+                return 0
+            doc = self.term_frequencies.get(doc_id, 0)
+            if doc == 0:
+                return 0
+            else:
+                return doc.get(tokenize[0], 0)
+
 
     match args.command:
         case "search":
@@ -119,14 +142,18 @@ def main() -> None:
             string = ''
             for doc in docs.values():
                 string += f"{doc['id']} {doc['title']}\n"
-            # print(string)   
             pass
         case "build":
             i = InvertedIndex()
             i.build()
             i.save()
-            
             pass
+        case "tf":
+            id = int(args.doc_id)
+            term = args.term
+            i = InvertedIndex()
+            i.build()
+            print(i.get_tf(id, term))
         case _:
             parser.print_help()
 
