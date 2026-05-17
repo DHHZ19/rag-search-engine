@@ -26,6 +26,9 @@ Record commands here as the exercise progresses.
 | --- | --- | --- | --- |
 | 2026-05-16 | `brew install uv` | Installed `uv` through Homebrew so the project can use a modern Python package and virtual environment workflow | Completed before this log entry was added |
 | 2026-05-16 | `mkdir -p data && cp ~/Desktop/course-rag-movies.json data/` | Copied movie dataset from Desktop into project `data/` folder | Completed; file is 25MB JSON |
+| 2026-05-17 | `uv sync` | Set up the project virtual environment so Python dependencies stay isolated from the rest of the computer | Completed; dependencies were already resolved |
+| 2026-05-17 | `uv run cli/keyword_search_cli.py tdf trapper` | Ran the current keyword-search CLI to check the reported count for `trapper` | Completed; output was `69` |
+| 2026-05-17 | `uv run python -c 'import pickle; index=pickle.load(open("cache/index.pkl","rb")); docmap=pickle.load(open("cache/docmap.pkl","rb")); tf=pickle.load(open("cache/term_frequencies.pkl","rb")); token="trapper"; ids=sorted(index.get(token,set())); print("matching_doc_count", len(ids)); print("matching_doc_ids", ids[:20]); print("term_frequency_sum", sum(tf.get(i,{}).get(token,0) for i in ids)); print("per_doc_frequency", [(i, tf.get(i,{}).get(token,0)) for i in ids[:20]]); print("docmap_sample", docmap.get(ids[0]) if ids else None)'` | Inspected the cached inverted index to compare matching document count with total word occurrence count | Completed; `trapper` appears in 11 documents and 69 total occurrences |
 
 ## Change Log
 
@@ -35,6 +38,7 @@ Record meaningful repository changes here.
 | --- | --- | --- | --- |
 | 2026-05-16 | `AGENTS.md`, `README.md` | Added agent instructions and created this learning log | To make future agent work tutor-like and easy to audit or clean up |
 | 2026-05-16 | `data/course-rag-movies.json` | Added movie dataset for RAG training | Source data for building the search engine |
+| 2026-05-17 | `README.md` | Logged the `uv` setup and CLI/index inspection commands | To keep the learning record current while verifying keyword-search behavior |
 
 ## Cleanup Notes
 

@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 
 import argparse
-import os
 import json
-import nltk
-import ssl
+import math
+import os
 import pickle
-from nltk.corpus import stopwords
-from nltk.stem import PorterStemmer
+import ssl
 from collections import Counter
+from nltk.stem import PorterStemmer
+
+import nltk
 
 
-    
 def main() -> None:
     parser = argparse.ArgumentParser(description="Keyword Search CLI")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -19,6 +19,11 @@ def main() -> None:
     search_parser = subparsers.add_parser("search", help="Search movies using BM25")
     search_parser.add_argument("query", type=str, help="Search query")
     search_parser = subparsers.add_parser("tf")
+    search_parser.add_argument("doc_id", type=str, help="Enter document id")
+    search_parser.add_argument("term", type=str, help="Enter search term")
+    search_parser = subparsers.add_parser("idf")
+    search_parser.add_argument("term", type=str, help="Enter search term")
+    search_parser = subparsers.add_parser("tfidf")
     search_parser.add_argument("doc_id", type=str, help="Enter document id")
     search_parser.add_argument("term", type=str, help="Enter search term")
     search_parser = subparsers.add_parser("build")
@@ -33,7 +38,7 @@ def main() -> None:
     else:
         ssl._create_default_https_context = _create_unverified_https_context
 
-    nltk.download('stopwords', quiet=True)
+    nltk.download("stopwords", quiet=True)
 
     class InvertedIndex:
         def __init__(self):
@@ -43,16 +48,19 @@ def main() -> None:
             self.stemmer = PorterStemmer()
 
         def __tokenize(self, text):
-            search_term = ''
+            search_term = ""
             for char in text:
-                if char.isalnum() or char == " ":
+                if char.isalnum() or char.isspace():
                     search_term += char
                 else:
-                    search_term += " "
+                    search_term += ""
 
             tokens = search_term.split()
+            with open("stopwords.txt", "r") as f:
+                stopwords = f.read().splitlines()
+                tokens = [token for token in tokens if token.lower() not in stopwords]
             return [self.stemmer.stem(token.lower()) for token in tokens]
-         
+
         def __add_document(self, doc_id, text):
             tokenize = self.__tokenize(text)
 
@@ -63,7 +71,7 @@ def main() -> None:
                 if doc_id not in self.term_frequencies:
                     self.term_frequencies[doc_id] = Counter()
                 self.term_frequencies[doc_id][token] += 1
-        
+
         def get_documents(self, term):
             tokenize = self.__tokenize(term)
             if len(tokenize) > 1:
@@ -82,35 +90,37 @@ def main() -> None:
                     self.__add_document(i, f"{m['title']} {m['description']}")
                     if i not in self.docmap:
                         self.docmap[i] = m
+
         def save(self):
-            if not os.path.isdir('cache'):
-                os.mkdir('cache')
-            with open('cache/index.pkl', 'wb+') as f:
+            if not os.path.isdir("cache"):
+                os.mkdir("cache")
+            with open("cache/index.pkl", "wb+") as f:
                 pickle.dump(self.index, f)
-            with open('cache/docmap.pkl', 'wb+') as f:
+            with open("cache/docmap.pkl", "wb+") as f:
                 pickle.dump(self.docmap, f)
-            with open('cache/term_frequencies.pkl', 'wb+') as f:
+            with open("cache/term_frequencies.pkl", "wb+") as f:
                 pickle.dump(self.term_frequencies, f)
 
         def load(self):
-                with open('cache/index.pkl', 'rb') as f:
-                    index = pickle.load(f)
-                    if index:
-                        self.index = index
-                    else: 
-                        raise FileNotFoundError 
-                with open('cache/docmap.pkl', 'rb') as f:
-                    docmap = pickle.load(f)
-                    if docmap:
-                        self.docmap = docmap
-                    else: 
-                        raise FileNotFoundError 
-                with open('cache/term_frequencies.pkl', 'rb') as f:
-                    term_frequencies = pickle.load(f)
-                    if docmap:
-                        self.term_frequencies = term_frequencies
-                    else: 
-                        raise FileNotFoundError 
+            with open("cache/index.pkl", "rb") as f:
+                index = pickle.load(f)
+                if index:
+                    self.index = index
+                else:
+                    raise FileNotFoundError
+            with open("cache/docmap.pkl", "rb") as f:
+                docmap = pickle.load(f)
+                if docmap:
+                    self.docmap = docmap
+                else:
+                    raise FileNotFoundError
+            with open("cache/term_frequencies.pkl", "rb") as f:
+                term_frequencies = pickle.load(f)
+                if term_frequencies:
+                    self.term_frequencies = term_frequencies
+                else:
+                    raise FileNotFoundError
+
         def get_tf(self, doc_id, term):
             tokenize = self.__tokenize(term)
 
@@ -123,7 +133,6 @@ def main() -> None:
                 return 0
             else:
                 return doc.get(tokenize[0], 0)
-
 
     match args.command:
         case "search":
@@ -138,8 +147,8 @@ def main() -> None:
                     for docs_id in docs_ids:
                         docs[docs_id] = i.docmap[docs_id]
             except FileNotFoundError:
-                print("File not found") 
-            string = ''
+                print("File not found")
+            string = ""
             for doc in docs.values():
                 string += f"{doc['id']} {doc['title']}\n"
             pass
@@ -152,10 +161,46 @@ def main() -> None:
             id = int(args.doc_id)
             term = args.term
             i = InvertedIndex()
-            i.build()
+            i.load()
             print(i.get_tf(id, term))
+        case "idf":
+            i = InvertedIndex()
+            i.load()
+            arg = args.term
+            tokenize = i._InvertedIndex__tokenize(arg)
+            stemmed_term = tokenize[0]
+            total_doc_count = len(i.docmap)
+            term_match_doc_count = 0
+            is_set = i.index.get(stemmed_term, set())
+            term_match_doc_count += len(list(is_set))
+
+            idf = math.log((total_doc_count + 1) / (term_match_doc_count + 1))
+            print(f"Inverse document frequency of '{args.term}': {idf:.2f}")
+        case "tfidf":
+            i = InvertedIndex()
+            i.load()
+            arg = args.term
+            id = int(args.doc_id)
+            tokenize = i._InvertedIndex__tokenize(arg)
+            stemmed_term = tokenize[0]
+
+            total_doc_count = len(i.docmap)
+            term_match_doc_count = 0
+            is_set = i.index.get(stemmed_term, set())
+            term_match_doc_count = len(list(is_set))
+
+            idf = math.log((total_doc_count + 1) / (term_match_doc_count + 1))
+            tf = i.get_tf(id, stemmed_term)
+
+            tf_idf = tf * idf
+
+            print(
+                f"TF-IDF score of '{args.term}' in document '{args.doc_id}': {tf_idf:.2f}"
+            )
+
         case _:
             parser.print_help()
+
 
 if __name__ == "__main__":
     main()
