@@ -8,6 +8,8 @@ import pickle
 import ssl
 from collections import Counter
 from nltk.stem import PorterStemmer
+from constants import BM25_K1
+from constants import BM25_B
 
 import nltk
 
@@ -27,6 +29,27 @@ def main() -> None:
     search_parser.add_argument("doc_id", type=str, help="Enter document id")
     search_parser.add_argument("term", type=str, help="Enter search term")
     search_parser = subparsers.add_parser("build")
+    bm25_idf_parser = subparsers.add_parser(
+        "bm25idf", help="Get BM25 IDF score for a given term"
+    )
+    bm25_idf_parser.add_argument(
+        "term", type=str, help="Term to get BM25 IDF score for"
+    )
+    bm25_tf_parser = subparsers.add_parser(
+        "bm25tf", help="Get BM25 TF score for a given document ID and term"
+    )
+    bm25_tf_parser.add_argument("doc_id", type=int, help="Document ID")
+    bm25_tf_parser.add_argument("term", type=str, help="Term to get BM25 TF score for")
+    bm25_tf_parser.add_argument(
+        "k1", type=float, nargs="?", default=BM25_K1, help="Tunable BM25 K1 parameter"
+    )
+    bm25_tf_parser.add_argument(
+        "b", type=float, nargs="?", default=BM25_B, help="Tunable BM25 b parameter"
+    )
+    bm25search_parser = subparsers.add_parser(
+        "bm25search", help="Search movies using full BM25 scoring"
+    )
+    bm25search_parser.add_argument("query", type=str, help="Search query")
 
     args = parser.parse_args()
 
@@ -45,6 +68,7 @@ def main() -> None:
             self.index = {}
             self.docmap = {}
             self.term_frequencies = {}
+            self.doc_lengths = {}
             self.stemmer = PorterStemmer()
 
         def __tokenize(self, text):
@@ -63,6 +87,7 @@ def main() -> None:
 
         def __add_document(self, doc_id, text):
             tokenize = self.__tokenize(text)
+            self.doc_lengths[doc_id] = len(tokenize)
 
             for token in tokenize:
                 if token not in self.index:
@@ -71,6 +96,18 @@ def main() -> None:
                 if doc_id not in self.term_frequencies:
                     self.term_frequencies[doc_id] = Counter()
                 self.term_frequencies[doc_id][token] += 1
+
+        def __get_avg_doc_length(self):
+            docs_lengths = []
+            docs = len(list(self.doc_lengths))
+
+            if docs == 0:
+                raise ValueError("no docs")
+
+            for doc_length in self.doc_lengths.values():
+                docs_lengths.append(doc_length)
+
+            return sum(docs_lengths) / docs
 
         def get_documents(self, term):
             tokenize = self.__tokenize(term)
@@ -100,6 +137,8 @@ def main() -> None:
                 pickle.dump(self.docmap, f)
             with open("cache/term_frequencies.pkl", "wb+") as f:
                 pickle.dump(self.term_frequencies, f)
+            with open("cache/doc_length.pkl", "wb+") as f:
+                pickle.dump(self.doc_lengths, f)
 
         def load(self):
             with open("cache/index.pkl", "rb") as f:
@@ -120,6 +159,12 @@ def main() -> None:
                     self.term_frequencies = term_frequencies
                 else:
                     raise FileNotFoundError
+            with open("cache/doc_length.pkl", "rb") as f:
+                doc_lengths = pickle.load(f)
+                if doc_lengths:
+                    self.doc_lengths = doc_lengths
+                else:
+                    raise FileNotFoundError
 
         def get_tf(self, doc_id, term):
             tokenize = self.__tokenize(term)
@@ -134,12 +179,68 @@ def main() -> None:
             else:
                 return doc.get(tokenize[0], 0)
 
+        def get_bm25_idf(self, term):
+            tokenize = self.__tokenize(term)
+            if len(tokenize) > 1:
+                raise ValueError("must only be one term")
+
+            N = len(list(self.docmap))
+            df = len(list(self.index.get(tokenize[0], 0)))
+
+            bm25 = math.log((N - df + 0.5) / (df + 0.5) + 1)
+
+            return bm25
+
+        def bm25_idf_command(self, term):
+            self.load()
+            return self.get_bm25_idf(term)
+
+        def get_bm25_tf(self, doc_id, term, k1=BM25_K1, b=BM25_B):
+            doc_length = self.doc_lengths.get(doc_id, 0)
+            length_norm = 1 - b + b * (doc_length / self.__get_avg_doc_length())
+
+            tf = self.get_tf(doc_id, term)
+            bm25 = (tf * (k1 + 1)) / (tf + k1 * length_norm)
+            return bm25
+
+        def bm25_tf_command(self, doc_id, term, k1=BM25_K1, b=BM25_B):
+            self.load()
+            return self.get_bm25_tf(int(doc_id), term, k1, b)
+
+        def bm25(self, doc_id, term):
+            bm25 = self.get_bm25_idf(term) * self.get_bm25_tf(doc_id, term)
+
+            return bm25
+
+        def bm25_search(self, query, limit=5):
+            tokenized = self.__tokenize(query)
+            scores = {}
+
+            if len(tokenized) == 0:
+                return scores
+
+            for key in self.docmap:
+                scores[key] = sum(self.bm25(key, token) for token in tokenized)
+
+            scores_sorted = sorted(
+                scores.items(), key=lambda item: item[1], reverse=True
+            )
+
+            res = {}
+            for key, value in scores_sorted[:limit]:
+                res[key] = f"{self.docmap[key]['title']} {value:.2f}"
+
+            return res
+
+        def bm25_command(self, query):
+            self.load()
+            return self.bm25_search(query)
+
     match args.command:
         case "search":
             i = InvertedIndex()
             try:
                 i.load()
-                print(i.docmap)
                 token = args.command.split()
                 docs = dict()
                 for token in list(i.index)[:5]:
@@ -197,6 +298,29 @@ def main() -> None:
             print(
                 f"TF-IDF score of '{args.term}' in document '{args.doc_id}': {tf_idf:.2f}"
             )
+        case "bm25idf":
+            i = InvertedIndex()
+            bm25idf = i.bm25_idf_command(args.term)
+
+            print(f"BM25 IDF score of '{args.term}': {bm25idf:.2f}")
+
+        case "bm25tf":
+            i = InvertedIndex()
+            bm25tf = i.bm25_tf_command(args.doc_id, args.term, args.k1, args.b)
+            print(
+                f"BM25 TF score of '{args.term}' in document '{args.doc_id}': {bm25tf:.2f}"
+            )
+
+        case "bm25search":
+            i = InvertedIndex()
+            res = i.bm25_command(args.query)
+
+            string = ""
+
+            for item in list(list(res.items())):
+                string += f"{item[0]}  - Score: {item[1]} \n"
+
+            print(string)
 
         case _:
             parser.print_help()
