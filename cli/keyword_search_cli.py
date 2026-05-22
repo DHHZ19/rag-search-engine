@@ -7,11 +7,10 @@ import os
 import pickle
 import ssl
 from collections import Counter
-from nltk.stem import PorterStemmer
-from constants import BM25_K1
-from constants import BM25_B
 
 import nltk
+from constants import BM25_B, BM25_K1
+from nltk.stem import PorterStemmer
 
 
 def main() -> None:
