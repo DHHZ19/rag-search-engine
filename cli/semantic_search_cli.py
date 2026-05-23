@@ -5,6 +5,7 @@ import json
 import re
 
 from lib.semantic_search import (
+    ChunkedSemanticSearch,
     SemanticSearch,
     embed_text,
     verify_embeddings,
@@ -57,6 +58,8 @@ def main():
     semantic_chunk.add_argument(
         "--overlap", default=0, required=False, type=int, help="overlap argument"
     )
+
+    embed_chunks = subparsers.add_parser("embed_chunks", help="documents to embed")
 
     args = parser.parse_args()
 
@@ -142,6 +145,14 @@ def main():
 
             for i, chunk in enumerate(semantic_chunk_res, start=1):
                 print(f"{i}  {chunk}")
+
+        case "embed_chunks":
+            css = ChunkedSemanticSearch()
+            with open("data/movies.json", "rb") as file:
+                data = json.load(file)
+                embeddings = css.load_or_create_chunk_embeddings(data["movies"])
+
+            print(f"Generated {len(embeddings)} chunked embeddings")
 
         case _:
             parser.print_help()
