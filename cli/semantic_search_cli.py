@@ -2,7 +2,7 @@
 
 import argparse
 import json
-from lzma import CHECK_UNKNOWN
+import re
 
 from lib.semantic_search import (
     SemanticSearch,
@@ -41,6 +41,21 @@ def main():
     )
     chunk_command.add_argument(
         "--overlap", type=int, required=False, help="optional chunk size"
+    )
+
+    semantic_chunk = subparsers.add_parser(
+        "semantic_chunk", help="enter semantic chunking"
+    )
+    semantic_chunk.add_argument("semantic_chunk", type=str, help="add semantic chunk")
+    semantic_chunk.add_argument(
+        "--max-chunk-size",
+        default=4,
+        required=False,
+        type=int,
+        help="add chunk max chunk size",
+    )
+    semantic_chunk.add_argument(
+        "--overlap", default=0, required=False, type=int, help="overlap argument"
     )
 
     args = parser.parse_args()
@@ -102,6 +117,32 @@ def main():
             print(f"Chunking {len(text)} characters")
             for i, chunk in enumerate(chunks):
                 print(f"{i + 1}. {chunk}")
+
+        case "semantic_chunk":
+            semantic_chunk_text = args.semantic_chunk
+            semantic_chunk_size = args.max_chunk_size
+            overlap_size = args.overlap
+
+            sentences_arr = re.split(r"(?<=[.!?])\s+", semantic_chunk_text)
+
+            semantic_chunk_res = []
+
+            i = 0
+
+            while i < len(sentences_arr):
+                chunk_sentences = sentences_arr[i : i + semantic_chunk_size]
+
+                if semantic_chunk_res and len(chunk_sentences) <= overlap_size:
+                    break
+
+                semantic_chunk_res.append(" ".join(chunk_sentences))
+                i += semantic_chunk_size - overlap_size
+
+            print(f"Semantically chunking {len(semantic_chunk_text)} characters")
+
+            for i, chunk in enumerate(semantic_chunk_res, start=1):
+                print(f"{i}  {chunk}")
+
         case _:
             parser.print_help()
 

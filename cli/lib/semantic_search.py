@@ -1,6 +1,8 @@
-from sentence_transformers import SentenceTransformer
 import json
+
 import numpy as np
+from numpy._core.multiarray import ndarray
+from sentence_transformers import SentenceTransformer
 
 
 def verify_model():
@@ -139,3 +141,16 @@ class SemanticSearch:
             )
 
         return dic_similarities
+
+
+class ChunkedSemanticSearch(SemanticSearch):
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
+        super().__init__(model_name)
+        self.chunk_embeddings = None
+        self.chunk_metadata = None
+
+    def build_chunk_embeddings(self, documents: list[dict]):
+        self.documents = documents
+        for i, doc in enumerate(documents, start=1):
+            if i not in self.document_map:
+                self.document_map[i] = doc
