@@ -2,11 +2,14 @@
 
 import argparse
 import json
+from lzma import CHECK_UNKNOWN
 
-from lib.semantic_search import verify_model
-from lib.semantic_search import embed_text
-from lib.semantic_search import verify_embeddings
-from lib.semantic_search import SemanticSearch
+from lib.semantic_search import (
+    SemanticSearch,
+    embed_text,
+    verify_embeddings,
+    verify_model,
+)
 
 
 def main():
@@ -29,6 +32,15 @@ def main():
     search_command.add_argument("search", type=str, help="Search query")
     search_command.add_argument(
         "--limit", type=int, required=False, help="Add a limit to your search"
+    )
+
+    chunk_command = subparsers.add_parser("chunk", help="add a search term")
+    chunk_command.add_argument("chunk", type=str, help="add positional argument")
+    chunk_command.add_argument(
+        "--chunk-size", type=int, required=False, help="optional chunk size"
+    )
+    chunk_command.add_argument(
+        "--overlap", type=int, required=False, help="optional chunk size"
     )
 
     args = parser.parse_args()
@@ -67,7 +79,29 @@ def main():
                     print(
                         f"{i}. {r['info']['title']} (score: {r['score']}) \n {r['info']['description']} \n"
                     )
+        case "chunk":
+            text = args.chunk
+            overlap = args.overlap
+            words = text.split()
+            chunk_size = args.chunk_size
+            chunks = []
 
+            n_words = len(words)
+            i = 0
+            o = 0
+
+            while i < n_words:
+                chunk_words = words[i : i + chunk_size]
+
+                if chunks and len(chunk_words) <= overlap:
+                    break
+
+                chunks.append(" ".join(chunk_words))
+                i += chunk_size - overlap
+
+            print(f"Chunking {len(text)} characters")
+            for i, chunk in enumerate(chunks):
+                print(f"{i + 1}. {chunk}")
         case _:
             parser.print_help()
 
