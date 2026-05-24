@@ -1,13 +1,25 @@
 import json
+import os
 import re
 from pathlib import Path
 
 import numpy as np
 from search_utils import (
+    CHUNK_EMBEDDINGS_PATH,
+    CHUNK_METADATA_PATH,
     DEFAULT_CHUNK_OVERLAP,
+    DEFAULT_SEARCH_LIMIT,
     DEFAULT_SEMANTIC_CHUNK_SIZE,
+    SCORE_PRECISION,
+    load_movies,
 )
 from sentence_transformers import SentenceTransformer
+
+
+def embed_chunks_command() -> np.ndarray:
+    movies = load_movies()
+    searcher = ChunkedSemanticSearch()
+    return searcher.load_or_create_chunk_embeddings(movies)
 
 
 def verify_model():
@@ -94,6 +106,14 @@ def semantic_chunk_text(
     #     print(f"{i + 1}. {chunk}")
 
     return chunks
+
+
+def search_chunked_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> dict:
+    movies = load_movies()
+    searcher = ChunkedSemanticSearch()
+    searcher.load_or_create_chunk_embeddings(movies)
+    results = searcher.search_chunks(query, limit)
+    return {"query": query, "results": results}
 
 
 class SemanticSearch:
@@ -185,57 +205,102 @@ class ChunkedSemanticSearch(SemanticSearch):
         self.chunk_embeddings = None
         self.chunk_metadata = None
 
-    def build_chunk_embeddings(self, documents: list[dict]):
+    def build_chunk_embeddings(self, documents: list[dict]) -> np.ndarray:
         self.documents = documents
+        self.document_map = {}
+        for doc in documents:
+            self.document_map[doc["id"]] = doc
 
-        # add docs to docmap
-        for i, doc in enumerate(documents, start=1):
-            if i not in self.document_map:
-                self.document_map[i] = doc
-
-        chunk_metadata: list[dict] = []
-
-        # semantic chunking
         all_chunks = []
-        for i, doc in enumerate(documents, start=1):
-            chunks = semantic_chunk_text(text=doc["description"], overlap=1)
-            if len(doc["description"]) != 0:
-                all_chunks.extend(chunks)
-            chunk_metadata.append(
-                {"movie_idx": i, "chunk_idx": i, "total_chunks": len(chunks)}
+        chunk_metadata = []
+
+        for idx, doc in enumerate(documents):
+            text = doc.get("description", "")
+            if not text.strip():
+                continue
+
+            chunks = semantic_chunk(
+                text,
+                max_chunk_size=DEFAULT_SEMANTIC_CHUNK_SIZE,
+                overlap=DEFAULT_CHUNK_OVERLAP,
             )
 
-        self.chunk_embeddings = []
+            for i, chunk in enumerate(chunks):
+                all_chunks.append(chunk)
+                chunk_metadata.append(
+                    {"movie_idx": idx, "chunk_idx": i, "total_chunks": len(chunks)}
+                )
 
-        for chunk in all_chunks:
-            self.chunk_embeddings.append(self.model.encode(chunk))
+        self.chunk_embeddings = self.model.encode(all_chunks, show_progress_bar=True)
+        self.chunk_metadata = chunk_metadata
 
-        np.save("cache/chunk_embeddings.npy", self.chunk_embeddings)
-
-        with open("cache/chunk_metadata.json", "w") as f:
+        os.makedirs(os.path.dirname(CHUNK_EMBEDDINGS_PATH), exist_ok=True)
+        np.save(CHUNK_EMBEDDINGS_PATH, self.chunk_embeddings)
+        with open(CHUNK_METADATA_PATH, "w") as f:
             json.dump(
                 {"chunks": chunk_metadata, "total_chunks": len(all_chunks)}, f, indent=2
             )
 
         return self.chunk_embeddings
 
-    def load_or_create_chunk_embeddings(self, documents: list[dict]):
+    def load_or_create_chunk_embeddings(self, documents: list[dict]) -> np.ndarray:
         self.documents = documents
+        self.document_map = {}
+        for doc in documents:
+            self.document_map[doc["id"]] = doc
 
-        # add docs to docmap
-        for i, doc in enumerate(documents, start=1):
-            if i not in self.document_map:
-                self.document_map[i] = doc
-
-        if (
-            Path("cache/chunk_embeddings.npy").exists()
-            and Path("cache/chunk_metadata.json").exists()
+        if os.path.exists(CHUNK_EMBEDDINGS_PATH) and os.path.exists(
+            CHUNK_METADATA_PATH
         ):
-            self.chunk_embeddings = np.load("cache/chunk_embeddings.npy")
-
-            with open("cache/chunk_metadata.json", "r") as f:
+            self.chunk_embeddings = np.load(CHUNK_EMBEDDINGS_PATH)
+            with open(CHUNK_METADATA_PATH, "r") as f:
                 data = json.load(f)
-                self.chunk_metadata = data
+                self.chunk_metadata = data["chunks"]
             return self.chunk_embeddings
 
         return self.build_chunk_embeddings(documents)
+
+    def search_chunks(self, query: str, limit: int = 10):
+        if self.chunk_embeddings is None or self.chunk_metadata is None:
+            raise ValueError(
+                "No chunk embeddings loaded. Call load_or_create_chunk_embeddings first."
+            )
+
+        vec1 = self.generate_embedding(query)
+
+        chunk_scores = []
+
+        for idx, vec2 in enumerate(self.chunk_embeddings):
+            similarity_score = cosine_similarity(vec1, vec2)
+            chunk_scores.append(
+                {
+                    "chunk_idx": self.chunk_metadata[idx]["chunk_idx"],
+                    "score": similarity_score,
+                    "movie_idx": self.chunk_metadata[idx]["movie_idx"],
+                }
+            )
+
+        movies_socres_dict = {}
+
+        for chunk_score in chunk_scores:
+            if chunk_score["movie_idx"] not in movies_socres_dict:
+                movies_socres_dict[chunk_score["movie_idx"]] = chunk_score["score"]
+            elif chunk_score["score"] > movies_socres_dict[chunk_score["movie_idx"]]:
+                movies_socres_dict[chunk_score["movie_idx"]] = chunk_score["score"]
+
+        sorted_movie_scores = sorted(
+            movies_socres_dict.items(), key=lambda item: item[1], reverse=True
+        )
+
+        results = []
+        for idx, score in sorted_movie_scores[:limit]:
+            results.append(
+                {
+                    "id": self.documents[idx],
+                    "title": self.documents[idx]["title"],
+                    "document": self.documents[idx]["description"][:100],
+                    "score": round(score, SCORE_PRECISION),
+                    "metadata": {},
+                }
+            )
+        return results

@@ -8,9 +8,11 @@ from lib.semantic_search import (
     ChunkedSemanticSearch,
     SemanticSearch,
     embed_text,
+    search_chunked_command,
     verify_embeddings,
     verify_model,
 )
+from search_utils import load_movies
 
 
 def main():
@@ -59,7 +61,11 @@ def main():
         "--overlap", default=0, required=False, type=int, help="overlap argument"
     )
 
-    embed_chunks = subparsers.add_parser("embed_chunks", help="documents to embed")
+    subparsers.add_parser("embed_chunks", help="documents to embed")
+
+    searched_chunked = subparsers.add_parser("search_chunked", help="chunked search")
+    searched_chunked.add_argument("search_chunked", help="query is required")
+    searched_chunked.add_argument("--limit", required=False, default=5, type=int)
 
     args = parser.parse_args()
 
@@ -153,6 +159,19 @@ def main():
                 embeddings = css.load_or_create_chunk_embeddings(data["movies"])
 
             print(f"Generated {len(embeddings)} chunked embeddings")
+
+        case "search_chunked":
+            query = args.search_chunked
+            limit = args.limit
+
+            results = search_chunked_command(query, limit)
+
+            for i, doc in enumerate(results["results"], start=1):
+                TITLE = doc["title"]
+                SCORE = doc["score"]
+                DOCUMENT = doc["document"]
+                print(f"\n{i}. {TITLE} (score: {SCORE:.4f})")
+                print(f"   {DOCUMENT}...")
 
         case _:
             parser.print_help()

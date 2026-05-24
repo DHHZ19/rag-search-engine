@@ -33,6 +33,11 @@ Record commands here as the exercise progresses.
 | 2026-05-19 | `uv run cli/semantic_search_cli.py verify` | Tested the semantic-search CLI `verify` subcommand | First failed because `argparse` parsed arguments before the `verify` subcommand was registered |
 | 2026-05-19 | `uv run cli/semantic_search_cli.py verify` | Re-tested the semantic-search CLI after fixing argument parsing | Failed again because `max_seq_length` was read from the wrapper object instead of the SentenceTransformer model |
 | 2026-05-19 | `uv run cli/semantic_search_cli.py verify` | Verified the semantic-search model loads after both fixes | Completed; printed the loaded model and max sequence length `256` |
+| 2026-05-23 | `uv sync` | Set up the project virtual environment before inspecting semantic chunked search | Completed; dependencies were already installed |
+| 2026-05-23 | `uv run cli/semantic_search_cli.py search_chunked "superhero action movie" --limit 25` | Reproduced the chunked semantic search output for the superhero query | Completed; output did not include the expected titles in the top 25 |
+| 2026-05-23 | `uv run python -c 'from search_utils import load_movies; movies=load_movies(); titles={"Kick-Ass","The Incredibles","Logan"}; print("first_five", [(i, m["id"], m["title"]) for i,m in enumerate(movies[:5])]); print("expected", [(i, m["id"], m["title"]) for i,m in enumerate(movies) if m["title"] in titles])'` | Tried to inspect movie list positions from the project root | Failed with `ModuleNotFoundError: No module named 'search_utils'`, showing that direct scripts need the `cli` folder on `PYTHONPATH` |
+| 2026-05-23 | `PYTHONPATH=cli uv run python -c 'from search_utils import load_movies; movies=load_movies(); titles={"Kick-Ass","The Incredibles","Logan"}; print("first_five", [(i, m["id"], m["title"]) for i,m in enumerate(movies[:5])]); print("expected", [(i, m["id"], m["title"]) for i,m in enumerate(movies) if m["title"] in titles])'` | Compared Python list indexes with movie IDs for the expected titles | Completed; the expected movies have zero-based list indexes one less than their one-based IDs |
+| 2026-05-23 | `PYTHONPATH=cli uv run python -c 'from search_utils import load_movies; movies=load_movies(); indexes=[1176,1177,1178,3313,3314,3315,4431,4432,4433]; print([(i, movies[i]["id"], movies[i]["title"]) for i in indexes])'` | Checked neighboring movies around the expected titles | Completed; several printed wrong titles are immediately before the expected titles in the movie list |
 
 ## Change Log
 
@@ -46,6 +51,7 @@ Record meaningful repository changes here.
 | 2026-05-19 | `cli/semantic_search_cli.py` | Moved `parser.parse_args()` after subcommand registration and removed an invalid nested parser call | So `argparse` recognizes `verify` as a valid subcommand before parsing command-line input |
 | 2026-05-19 | `cli/lib/semantic_search.py` | Read `max_seq_length` from `ss.model` instead of `ss` and renamed local variables to normal lowercase names | The wrapper class owns the model, but the model owns the sequence-length setting |
 | 2026-05-19 | `README.md` | Logged the semantic-search CLI debugging steps | To preserve what failed, what changed, and how the fix was verified |
+| 2026-05-23 | `README.md` | Logged the chunked semantic search debugging commands and observations | To keep the learning record current while investigating the mapping issue |
 
 ## Cleanup Notes
 
