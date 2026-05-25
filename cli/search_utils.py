@@ -1,5 +1,6 @@
 import json
 import os
+import string
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -86,3 +87,11 @@ def format_search_result(
 def load_golden_dataset() -> GoldenDataset:
     with open(GOLDEN_DATASET_PATH, "r") as f:
         return json.load(f)
+
+
+def ends_with_punctuation(text: str):
+    return text.endswith(string.punctuation)
+
+
+def remove_sentence_whitespace(sentences: list[str]) -> list[str]:
+    return [sentence.strip() for sentence in sentences]

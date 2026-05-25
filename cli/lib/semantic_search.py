@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 import numpy as np
+import sentence_transformers
 from search_utils import (
     CHUNK_EMBEDDINGS_PATH,
     CHUNK_METADATA_PATH,
@@ -11,7 +12,9 @@ from search_utils import (
     DEFAULT_SEARCH_LIMIT,
     DEFAULT_SEMANTIC_CHUNK_SIZE,
     SCORE_PRECISION,
+    ends_with_punctuation,
     load_movies,
+    remove_sentence_whitespace,
 )
 from sentence_transformers import SentenceTransformer
 
@@ -82,7 +85,21 @@ def semantic_chunk(
     max_chunk_size: int = DEFAULT_SEMANTIC_CHUNK_SIZE,
     overlap: int = DEFAULT_CHUNK_OVERLAP,
 ) -> list[str]:
-    sentences = re.split(r"(?<=[.!?])\s+", text)
+    trimmed_text = text.strip()
+    if len(trimmed_text) == 0:
+        return []
+
+    sentences = re.split(r"(?<=[.!?])\s+", trimmed_text)
+
+    if len(sentences) == 1 and not ends_with_punctuation(sentences[0]):
+        return [sentences[0]]
+
+    sentences = remove_sentence_whitespace(sentences)
+
+    for i, sentence in enumerate(sentences):
+        if len(sentence) == 0:
+            del sentences[i]
+
     chunks = []
     i = 0
     n_sentences = len(sentences)
@@ -101,9 +118,9 @@ def semantic_chunk_text(
     overlap: int = DEFAULT_CHUNK_OVERLAP,
 ) -> list[str]:
     chunks = semantic_chunk(text, max_chunk_size, overlap)
-    # print(f"Semantically chunking {len(text)} characters")
-    # for i, chunk in enumerate(chunks):
-    #     print(f"{i + 1}. {chunk}")
+    print(f"Semantically chunking {len(text)} characters")
+    for i, chunk in enumerate(chunks):
+        print(f"{i + 1}. {chunk}")
 
     return chunks
 
