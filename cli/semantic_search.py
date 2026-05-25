@@ -10,6 +10,7 @@ from search_utils import (
     DEFAULT_CHUNK_OVERLAP,
     DEFAULT_SEARCH_LIMIT,
     DEFAULT_SEMANTIC_CHUNK_SIZE,
+    MOVIE_EMBEDDINGS_PATH,
     SCORE_PRECISION,
     ends_with_punctuation,
     load_movies,
@@ -153,66 +154,29 @@ class SemanticSearch:
 
     def build_embeddings(self, documents):
         self.documents = documents
-        doc_strings = []
-        for i, doc in enumerate(self.documents, start=1):
-            self.document_map[i] = doc
-            doc_strings.append(f"{doc['title']}: {doc['description']}")
+        self.document_map = {}
+        movie_strings = []
+        for doc in documents:
+            self.document_map[doc["id"]] = doc
+            movie_strings.append(f"{doc['title']}: {doc['description']}")
+        self.embeddings = self.model.encode(movie_strings, show_progress_bar=True)
 
-            self.embeddings = self.generate_embedding(doc_strings)
-
-        np.save("cache/movie_embeddings.npy", self.embeddings)
-
+        os.makedirs(os.path.dirname(MOVIE_EMBEDDINGS_PATH), exist_ok=True)
+        np.save(MOVIE_EMBEDDINGS_PATH, self.embeddings)
         return self.embeddings
 
     def load_or_create_embeddings(self, documents):
-        # set docuents, and docmap
         self.documents = documents
-        doc_strings = []
-        for i, doc in enumerate(self.documents, start=1):
-            self.document_map[i] = doc
-            doc_strings.append(f"{doc['title']}: {doc['description']}")
+        self.document_map = {}
+        for doc in documents:
+            self.document_map[doc["id"]] = doc
 
-        # load embeddings if present
-        with open("cache/movie_embeddings.npy", "rb") as f:
-            if f is not None:
-                embeddings = np.load("cache/movie_embeddings.npy")
-                if len(embeddings) == len(documents):
-                    return embeddings
-            return self.build_embeddings(documents=documents)
+        if os.path.exists(MOVIE_EMBEDDINGS_PATH):
+            self.embeddings = np.load(MOVIE_EMBEDDINGS_PATH)
+            if len(self.embeddings) == len(documents):
+                return self.embeddings
 
-    def search(self, query, limit=5):
-        if self.embeddings is None:
-            raise ValueError(
-                "No embeddings loaded. Call `load_or_create_embeddings` first."
-            )
-
-        embedding = self.generate_embedding(query)
-
-        similarity_scores = []
-
-        for i, e in enumerate(self.embeddings, start=1):
-            similarity_score = cosine_similarity(embedding, e)
-            touple = (self.document_map[i], similarity_score)
-            similarity_scores.append(touple)
-
-        sorted_similarity_scores = sorted(
-            similarity_scores, key=lambda item: item[1], reverse=True
-        )
-
-        # sorted = np.sort(similarity_scores, axis=1)
-
-        # sorted_similarity_scores = sorted[::-1]
-
-        dic_similarities = []
-        for touples_similarites in sorted_similarity_scores[:limit]:
-            dic_similarities.append(
-                {
-                    "score": touples_similarites[1],
-                    "info": self.document_map[int(touples_similarites[0]["id"])],
-                }
-            )
-
-        return dic_similarities
+        return self.build_embeddings(documents)
 
 
 class ChunkedSemanticSearch(SemanticSearch):

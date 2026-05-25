@@ -1,11 +1,17 @@
 import json
+import math
 import os
 import pickle
 from collections import Counter
 
 from constants import BM25_B, BM25_K1
 from nltk.stem import PorterStemmer
-from search_utils import CACHE_DIR
+from search_utils import (
+    CACHE_DIR,
+    DEFAULT_SEARCH_LIMIT,
+    SearchResult,
+    format_search_result,
+)
 
 
 class InvertedIndex:
@@ -158,23 +164,36 @@ class InvertedIndex:
 
         return bm25
 
-    def bm25_search(self, query, limit=5):
-        tokenized = self.__tokenize(query)
-        scores = {}
+    def bm25_search(
+        self, query: str, limit: int = DEFAULT_SEARCH_LIMIT
+    ) -> list[SearchResult]:
+        query_tokens = self.__tokenize(query)
+        limit = int(limit)
 
-        if len(tokenized) == 0:
-            return scores
+        scores: dict[int, float] = {}
+        for doc_id in self.docmap:
+            score = 0.0
+            for token in query_tokens:
+                score += self.bm25(doc_id, token)
+            scores[doc_id] = score
 
-        for key in self.docmap:
-            scores[key] = sum(self.bm25(key, token) for token in tokenized)
+        if len(scores.items()) >= limit:
+            limit = math.floor(limit / 100)
 
-        scores_sorted = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+        sorted_docs = sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
-        res = {}
-        for key, value in scores_sorted[:limit]:
-            res[key] = f"{self.docmap[key]['title']} {value:.2f}"
+        results: list[SearchResult] = []
+        for doc_id, score in sorted_docs[:limit]:
+            doc = self.docmap[doc_id]
+            formatted_result = format_search_result(
+                doc_id=doc["id"],
+                title=doc["title"],
+                document=doc["description"],
+                score=score,
+            )
+            results.append(formatted_result)
 
-        return res
+        return results
 
     def bm25_command(self, query):
         self.load()
