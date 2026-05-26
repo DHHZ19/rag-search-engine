@@ -10,9 +10,10 @@ from search_utils import (
     DEFAULT_CHUNK_OVERLAP,
     DEFAULT_SEARCH_LIMIT,
     DEFAULT_SEMANTIC_CHUNK_SIZE,
+    DOCUMENT_PREVIEW_LENGTH,
     MOVIE_EMBEDDINGS_PATH,
-    SCORE_PRECISION,
     ends_with_punctuation,
+    format_search_result,
     load_movies,
     remove_sentence_whitespace,
 )
@@ -240,47 +241,48 @@ class ChunkedSemanticSearch(SemanticSearch):
 
         return self.build_chunk_embeddings(documents)
 
-    def search_chunks(self, query: str, limit: int = 10):
+    def search_chunks(self, query: str, limit: int = 10) -> list[dict]:
         if self.chunk_embeddings is None or self.chunk_metadata is None:
             raise ValueError(
                 "No chunk embeddings loaded. Call load_or_create_chunk_embeddings first."
             )
 
-        vec1 = self.generate_embedding(query)
+        query_embedding = self.generate_embedding(query)
 
         chunk_scores = []
-
-        for idx, vec2 in enumerate(self.chunk_embeddings):
-            similarity_score = cosine_similarity(vec1, vec2)
+        for i, chunk_embedding in enumerate(self.chunk_embeddings):
+            similarity = cosine_similarity(query_embedding, chunk_embedding)
             chunk_scores.append(
                 {
-                    "chunk_idx": self.chunk_metadata[idx]["chunk_idx"],
-                    "score": similarity_score,
-                    "movie_idx": self.chunk_metadata[idx]["movie_idx"],
+                    "chunk_idx": self.chunk_metadata[i]["chunk_idx"],
+                    "movie_idx": self.chunk_metadata[i]["movie_idx"],
+                    "score": similarity,
                 }
             )
 
-        movies_socres_dict = {}
-
+        movie_scores = {}
         for chunk_score in chunk_scores:
-            if chunk_score["movie_idx"] not in movies_socres_dict:
-                movies_socres_dict[chunk_score["movie_idx"]] = chunk_score["score"]
-            elif chunk_score["score"] > movies_socres_dict[chunk_score["movie_idx"]]:
-                movies_socres_dict[chunk_score["movie_idx"]] = chunk_score["score"]
+            movie_idx = chunk_score["movie_idx"]
+            if (
+                movie_idx not in movie_scores
+                or chunk_score["score"] > movie_scores[movie_idx]
+            ):
+                movie_scores[movie_idx] = chunk_score["score"]
 
-        sorted_movie_scores = sorted(
-            movies_socres_dict.items(), key=lambda item: item[1], reverse=True
-        )
+        sorted_movies = sorted(movie_scores.items(), key=lambda x: x[1], reverse=True)
 
         results = []
-        for idx, score in sorted_movie_scores[:limit]:
+        for movie_idx, score in sorted_movies[:limit]:
+            if movie_idx is None:
+                continue
+            doc = self.documents[movie_idx]
             results.append(
-                {
-                    "id": self.documents[idx],
-                    "title": self.documents[idx]["title"],
-                    "document": self.documents[idx]["description"][:100],
-                    "score": round(score, SCORE_PRECISION),
-                    "metadata": {},
-                }
+                format_search_result(
+                    doc_id=doc["id"],
+                    title=doc["title"],
+                    document=doc["description"][:DOCUMENT_PREVIEW_LENGTH],
+                    score=score,
+                )
             )
+
         return results

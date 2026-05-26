@@ -1,6 +1,6 @@
 import argparse
 
-from hybrid_search import HybridSearch, hybrid_score
+from hybrid_search import HybridSearch, hybrid_score, weighted_search_command
 from search_utils import load_movies
 
 
@@ -33,22 +33,24 @@ def main() -> None:
             print(hs.normalize_scores(scores))
 
         case "weighted-search":
-            query = args.query
-            alpha = args.alpha
-            limit = args.limit
-            movies = load_movies()
-            hs = HybridSearch(movies)
+            result = weighted_search_command(args.query, args.alpha, args.limit)
 
-            hs.semantic_search.load_or_create_embeddings(movies)
-            docs_with_scores = hs.weighted_search(query, alpha, limit)
-
-            for i, doc in enumerate(docs_with_scores, start=1):
-                print(f"{i}\n")
-                print(f"{doc['document']['title']}")
-                print(
-                    f"BM25: {doc['keyword_score']}, Semantic: {doc['semantic_score']} "
-                )
-                print(f"{doc['document']['description']}")
+            print(
+                f"Weighted Hybrid Search Results for '{result['query']}' (alpha={result['alpha']}):"
+            )
+            print(
+                f"  Alpha {result['alpha']}: {int(result['alpha'] * 100)}% Keyword, {int((1 - result['alpha']) * 100)}% Semantic"
+            )
+            for i, res in enumerate(result["results"], 1):
+                print(f"{i}. {res['title']}")
+                print(f"   Hybrid Score: {res.get('score', 0):.3f}")
+                metadata = res.get("metadata", {})
+                if "bm25_score" in metadata and "semantic_score" in metadata:
+                    print(
+                        f"   BM25: {metadata['bm25_score']:.3f}, Semantic: {metadata['semantic_score']:.3f}"
+                    )
+                print(f"   {res['document'][:100]}...")
+                print()
 
         case _:
             parser.print_help()
