@@ -2,6 +2,7 @@ import argparse
 
 from hybrid_search import (
     HybridSearch,
+    enhance_query,
     hybrid_score,
     rrf_search_command,
     weighted_search_command,
@@ -38,6 +39,12 @@ def main() -> None:
     rrf_search.add_argument(
         "--limit", type=int, default=5, help="Enter the limit defaults to 5"
     )
+    rrf_search.add_argument(
+        "--enhance",
+        type=str,
+        choices=["spell"],
+        help="Query enhancement method",
+    )
 
     args = parser.parse_args()
 
@@ -73,6 +80,17 @@ def main() -> None:
             query = args.query
             k = args.k
             limit = args.limit
+            enhance = args.enhance
+            METHOD = enhance
+            QUERY = query
+            ENHANCED_QUERY = ""
+
+            if enhance == "spell":
+                query = enhance_query(QUERY)
+                ENHANCED_QUERY = query
+
+            print(f"Enhanced query ({METHOD}): '{QUERY}' -> '{ENHANCED_QUERY}'\n")
+
             res = rrf_search_command(query, k, limit)
 
             for i, doc_score in enumerate(res, start=1):

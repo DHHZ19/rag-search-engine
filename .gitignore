@@ -1,5 +1,6 @@
 # environments
 .zed/
+.env
 
 # Python-generated files
 __pycache__/
