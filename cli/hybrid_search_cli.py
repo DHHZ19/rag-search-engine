@@ -44,6 +44,13 @@ def main() -> None:
         choices=["spell", "rewrite", "expand"],
         help="Query enhancement method",
     )
+    rrf_search.add_argument(
+        "--rerank-method",
+        type=str,
+        choices=["individual"],
+        required=False,
+        help="enter rerank method",
+    )
 
     args = parser.parse_args()
 
@@ -80,9 +87,13 @@ def main() -> None:
             k = args.k
             limit = args.limit
             enhance = args.enhance
+            rerank_method = args.rerank_method
             METHOD = enhance
             QUERY = query
             ENHANCED_QUERY = ""
+
+            if rerank_method == "individual":
+                limit = limit * 5
 
             query = enhance_query(QUERY, enhance)
             ENHANCED_QUERY = query
@@ -94,6 +105,7 @@ def main() -> None:
             for i, doc_score in enumerate(res, start=1):
                 metadata = doc_score.get("metadata", {})
                 print(f"{i}. {doc_score['title']}")
+                print(f"Re-rank Score: {doc_score['rerank_score']}")
                 print(f"RRF Score: {doc_score['score']}")
                 print(
                     f"BM25 Rank: {metadata['bm25_score']} Semantic Rank: {metadata['semantic_score']}"

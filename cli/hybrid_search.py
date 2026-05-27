@@ -1,9 +1,7 @@
 import os
-from itertools import repeat
 
-from dotenv import load_dotenv
-from google import genai
 from keyword_search import InvertedIndex
+from llm_reranking import rerank_scores
 from search_utils import (
     DEFAULT_ALPHA,
     DEFAULT_SEARCH_LIMIT,
@@ -83,10 +81,12 @@ class HybridSearch:
             )
             hybrid_ranks.append(result)
 
+        rerank_scores(hybrid_ranks[:limit], query)
+
         sorted_movie_ids_rankings = sorted(
-            hybrid_ranks,
+            hybrid_ranks[:limit],
             reverse=True,
-            key=lambda item: item["score"],
+            key=lambda item: item["rerank_score"],
         )
 
         return sorted_movie_ids_rankings[:limit]
