@@ -27,7 +27,67 @@ class HybridSearch:
         return self.idx.bm25_search(query, limit)
 
     def rrf_search(self, query: str, k: int, limit: int = 10) -> list[dict]:
-        raise NotImplementedError("--overlp")
+        bm25_search_result = self._bm25_search(query, limit * 500)
+        semantic_search_result = self.semantic_search.search_chunks(query, limit * 500)
+
+        bm25_search_result = rank_scores(bm25_search_result)
+        semantic_search_result = rank_scores(semantic_search_result)
+
+        movie_ids_rankings = {}
+
+        for score in bm25_search_result:
+            if score["id"] not in movie_ids_rankings:
+                movie_ids_rankings[score["id"]] = {
+                    "title": score["title"],
+                    "document": score["document"],
+                    "bm25_rank": rrf_score(score["score"]),
+                    "semantic_rank": 0.0,
+                    "rrf_score": 0.0,
+                }
+
+        for score in semantic_search_result:
+            if score["id"] not in movie_ids_rankings:
+                movie_ids_rankings[score["id"]] = {
+                    "title": score["title"],
+                    "document": score["document"],
+                    "bm25_rank": 0.0,
+                    "semantic_rank": rrf_score(score["score"]),
+                    "rrf_score": 0.0,
+                }
+            else:
+                movie_ids_rankings[score["id"]]["semantic_rank"] = rrf_score(
+                    score["score"]
+                )
+
+        for key, movie_rank in movie_ids_rankings.items():
+            if movie_rank["bm25_rank"] != 0.0 and movie_rank["semantic_rank"] != 0.0:
+                movie_rank["rrf_score"] = (
+                    movie_rank["bm25_rank"] + movie_rank["semantic_rank"]
+                )
+            elif movie_rank["bm25_rank"] != 0.0 and movie_rank["semantic_rank"] == 0.0:
+                movie_rank["rrf_score"] = movie_rank["bm25_rank"]
+            elif movie_rank["bm25_rank"] == 0.0 and movie_rank["semantic_rank"] != 0.0:
+                movie_rank["rrf_score"] = movie_rank["semantic_rank"]
+
+        hybrid_ranks = []
+        for doc_id, data in movie_ids_rankings.items():
+            result = format_search_result(
+                doc_id=doc_id,
+                title=data["title"],
+                document=data["document"],
+                score=data["rrf_score"],
+                bm25_score=data["bm25_rank"],
+                semantic_score=data["semantic_rank"],
+            )
+            hybrid_ranks.append(result)
+
+        sorted_movie_ids_rankings = sorted(
+            hybrid_ranks,
+            reverse=True,
+            key=lambda item: item["score"],
+        )
+
+        return sorted_movie_ids_rankings[:limit]
 
     def weighted_search(self, query: str, alpha: float, limit: int = 5) -> list[dict]:
         bm25_results = self._bm25_search(query, limit * 500)
@@ -135,3 +195,21 @@ def normalize_scores(scores: list[float]) -> list[float]:
 
 def hybrid_score(bm25_score: float, semantic_score: float, alpha: float = 0.5) -> float:
     return alpha * bm25_score + (1 - alpha) * semantic_score
+
+
+def rrf_search_command(query: str, k=60, limit=10):
+    movies = load_movies()
+    hy = HybridSearch(movies)
+
+    return hy.rrf_search(query, 8, limit)
+
+
+def rrf_score(rank: int, k: int = 60) -> float:
+    return 1 / (k + rank)
+
+
+def rank_scores(scores: list[dict]):
+    for i, score in enumerate(scores, start=1):
+        score["score"] = i
+
+    return scores

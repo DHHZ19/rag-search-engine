@@ -1,6 +1,11 @@
 import argparse
 
-from hybrid_search import HybridSearch, hybrid_score, weighted_search_command
+from hybrid_search import (
+    HybridSearch,
+    hybrid_score,
+    rrf_search_command,
+    weighted_search_command,
+)
 from search_utils import load_movies
 
 
@@ -21,6 +26,18 @@ def main() -> None:
         "--alpha", type=float, help="Alpha how much weight you want on a keyword search"
     )
     weighted_search.add_argument("--limit", type=int, default=5, help="the limit")
+
+    rrf_search = subparsers.add_parser(
+        "rrf-search",
+        help="rrf search used for searching and adds the scores of the semantic search and keyword search together using Reciprocal rank fusion",
+    )
+    rrf_search.add_argument("query", type=str, help="Must Enter a Query")
+    rrf_search.add_argument(
+        "-k", type=int, default=60, help="enter k paramater defaults to 60"
+    )
+    rrf_search.add_argument(
+        "--limit", type=int, default=5, help="Enter the limit defaults to 5"
+    )
 
     args = parser.parse_args()
 
@@ -51,6 +68,20 @@ def main() -> None:
                     )
                 print(f"   {res['document'][:100]}...")
                 print()
+
+        case "rrf-search":
+            query = args.query
+            k = args.k
+            limit = args.limit
+            res = rrf_search_command(query, k, limit)
+
+            for i, doc_score in enumerate(res, start=1):
+                metadata = doc_score.get("metadata", {})
+                print(f"{i} {doc_score['title']}")
+                print(f"RRF Score: {doc_score['score']}")
+                print(
+                    f"BM25 Rank: {metadata['bm25_score']} Semantic Rank: {metadata['semantic_score']}"
+                )
 
         case _:
             parser.print_help()
