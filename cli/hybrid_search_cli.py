@@ -41,7 +41,7 @@ def main() -> None:
     rrf_search.add_argument(
         "--enhance",
         type=str,
-        choices=["spell", "rewrite"],
+        choices=["spell", "rewrite", "expand"],
         help="Query enhancement method",
     )
 
@@ -93,11 +93,12 @@ def main() -> None:
 
             for i, doc_score in enumerate(res, start=1):
                 metadata = doc_score.get("metadata", {})
-                print(f"{i} {doc_score['title']}")
+                print(f"{i}. {doc_score['title']}")
                 print(f"RRF Score: {doc_score['score']}")
                 print(
                     f"BM25 Rank: {metadata['bm25_score']} Semantic Rank: {metadata['semantic_score']}"
                 )
+                print()
 
         case _:
             parser.print_help()
