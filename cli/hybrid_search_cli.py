@@ -2,11 +2,10 @@ import argparse
 
 from hybrid_search import (
     HybridSearch,
-    enhance_query,
-    hybrid_score,
     rrf_search_command,
     weighted_search_command,
 )
+from query_enhancement import enhance_query
 from search_utils import load_movies
 
 
@@ -85,9 +84,8 @@ def main() -> None:
             QUERY = query
             ENHANCED_QUERY = ""
 
-            if enhance == "spell":
-                query = enhance_query(QUERY)
-                ENHANCED_QUERY = query
+            query = enhance_query(QUERY, enhance)
+            ENHANCED_QUERY = query
 
             print(f"Enhanced query ({METHOD}): '{QUERY}' -> '{ENHANCED_QUERY}'\n")
 
