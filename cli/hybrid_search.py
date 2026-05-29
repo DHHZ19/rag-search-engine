@@ -59,7 +59,7 @@ class HybridSearch:
                 }
             else:
                 movie_ids_rankings[score["id"]]["semantic_rank"] = rrf_score(
-                    score["score"]
+                    score["score"], k
                 )
 
         for key, movie_rank in movie_ids_rankings.items():
@@ -211,7 +211,7 @@ def rrf_search_command(query: str, k=60, limit=10, rerank_method="batch"):
     movies = load_movies()
     hy = HybridSearch(movies)
 
-    return hy.rrf_search(query, 8, limit, rerank_method)
+    return hy.rrf_search(query, k, limit, rerank_method)
 
 
 def rrf_score(rank: int, k: int = 60) -> float:

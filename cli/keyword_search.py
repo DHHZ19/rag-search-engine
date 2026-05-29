@@ -137,7 +137,7 @@ class InvertedIndex:
             raise ValueError("must only be one term")
 
         N = len(list(self.docmap))
-        df = len(list(self.index.get(tokenize[0], 0)))
+        df = len(self.index.get(tokenize[0], set()))
 
         bm25 = math.log((N - df + 0.5) / (df + 0.5) + 1)
 
