@@ -1,7 +1,7 @@
 import os
 
 from keyword_search import InvertedIndex
-from llm_reranking import batch_rerank_scores, rerank_scores
+from llm_reranking import batch_rerank_scores, cross_encoding, rerank_scores
 from search_utils import (
     DEFAULT_ALPHA,
     DEFAULT_SEARCH_LIMIT,
@@ -9,6 +9,7 @@ from search_utils import (
     load_movies,
 )
 from semantic_search import ChunkedSemanticSearch
+from sentence_transformers import CrossEncoder
 
 
 class HybridSearch:
@@ -83,17 +84,20 @@ class HybridSearch:
             )
             hybrid_ranks.append(result)
 
+        sorted_movie_ids_rankings = []
+
         if rerank_method == "batch":
-            batch_rerank_scores(hybrid_ranks[:limit], query)
+            sorted_movie_ids_rankings = batch_rerank_scores(
+                hybrid_ranks[:limit], query, limit
+            )
+        elif rerank_method == "cross_encoder":
+            sorted_movie_ids_rankings = cross_encoding(hybrid_ranks[:limit], query)
         else:
-            rerank_scores(hybrid_ranks[:limit], query)
+            sorted_movie_ids_rankings = rerank_scores(
+                hybrid_ranks[:limit], query, limit
+            )
 
-        sorted_movie_ids_rankings = sorted(
-            hybrid_ranks[:limit],
-            key=lambda item: item["rerank_score"],
-        )
-
-        return sorted_movie_ids_rankings
+        return sorted_movie_ids_rankings[:limit]
 
     def weighted_search(self, query: str, alpha: float, limit: int = 5) -> list[dict]:
         bm25_results = self._bm25_search(query, limit * 500)

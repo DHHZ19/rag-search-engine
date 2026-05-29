@@ -47,7 +47,7 @@ def main() -> None:
     rrf_search.add_argument(
         "--rerank-method",
         type=str,
-        choices=["individual", "batch"],
+        choices=["individual", "batch", "cross_encoder"],
         required=False,
         help="enter rerank method",
     )
@@ -91,8 +91,9 @@ def main() -> None:
             METHOD = enhance
             QUERY = query
             ENHANCED_QUERY = ""
+            DEFULT_LIMIT = limit
 
-            if rerank_method == "individual" or rerank_method == "batch":
+            if rerank_method:
                 limit = limit * 5
 
             query = enhance_query(QUERY, enhance)
@@ -102,7 +103,7 @@ def main() -> None:
 
             res = rrf_search_command(query, k, limit, rerank_method)
 
-            for i, doc_score in enumerate(res, start=1):
+            for i, doc_score in enumerate(res[:DEFULT_LIMIT], start=1):
                 metadata = doc_score.get("metadata", {})
                 print(f"{i}. {doc_score['title']}")
                 print(f"Re-rank Score: {doc_score['rerank_score']}")
