@@ -1,7 +1,7 @@
 import os
 
 from keyword_search import InvertedIndex
-from llm_reranking import rerank_scores
+from llm_reranking import batch_rerank_scores, rerank_scores
 from search_utils import (
     DEFAULT_ALPHA,
     DEFAULT_SEARCH_LIMIT,
@@ -26,7 +26,9 @@ class HybridSearch:
         self.idx.load()
         return self.idx.bm25_search(query, limit)
 
-    def rrf_search(self, query: str, k: int, limit: int = 10) -> list[dict]:
+    def rrf_search(
+        self, query: str, k: int, limit: int = 10, rerank_method: str = "batch"
+    ) -> list[dict]:
         bm25_search_result = self._bm25_search(query, limit * 500)
         semantic_search_result = self.semantic_search.search_chunks(query, limit * 500)
 
@@ -81,15 +83,17 @@ class HybridSearch:
             )
             hybrid_ranks.append(result)
 
-        rerank_scores(hybrid_ranks[:limit], query)
+        if rerank_method == "batch":
+            batch_rerank_scores(hybrid_ranks[:limit], query)
+        else:
+            rerank_scores(hybrid_ranks[:limit], query)
 
         sorted_movie_ids_rankings = sorted(
             hybrid_ranks[:limit],
-            reverse=True,
             key=lambda item: item["rerank_score"],
         )
 
-        return sorted_movie_ids_rankings[:limit]
+        return sorted_movie_ids_rankings
 
     def weighted_search(self, query: str, alpha: float, limit: int = 5) -> list[dict]:
         bm25_results = self._bm25_search(query, limit * 500)
@@ -199,11 +203,11 @@ def hybrid_score(bm25_score: float, semantic_score: float, alpha: float = 0.5) -
     return alpha * bm25_score + (1 - alpha) * semantic_score
 
 
-def rrf_search_command(query: str, k=60, limit=10):
+def rrf_search_command(query: str, k=60, limit=10, rerank_method="batch"):
     movies = load_movies()
     hy = HybridSearch(movies)
 
-    return hy.rrf_search(query, 8, limit)
+    return hy.rrf_search(query, 8, limit, rerank_method)
 
 
 def rrf_score(rank: int, k: int = 60) -> float:
