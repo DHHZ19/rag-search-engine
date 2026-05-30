@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Literal, TypedDict
 
@@ -152,13 +153,6 @@ def hybrid_score(bm25_score: float, semantic_score: float, alpha: float = 0.5) -
     return alpha * bm25_score + (1 - alpha) * semantic_score
 
 
-# def rrf_search_command(query: str, k=60, limit=10, rerank_method="batch"):
-#     movies = load_movies()
-#     hy = HybridSearch(movies)
-
-#     return hy.rrf_search(query, k, limit, rerank_method)
-
-
 def rrf_score(rank: int, k: int = 60) -> float:
     return 1 / (k + rank)
 
@@ -184,15 +178,22 @@ def rrf_search_command(
     enhanced_query = None
     if enhance:
         enhanced_query = enhance_query(query, method=enhance)
+        print(
+            f"logging regular and enhanced query. regular: {query} enhanced: {enhanced_query}"
+        )
         query = enhanced_query
 
     search_limit = limit * SEARCH_MULTIPLIER if rerank_method else limit
     results = searcher.rrf_search(query, k, search_limit)
 
+    print(f"logging rrf_search results: {json.dumps(results, indent=2)}")
+
     reranked = False
     if rerank_method:
         results = rerank(query, results, method=rerank_method, limit=limit)
         reranked = True
+
+    print(f"logging rerank results: {json.dumps(results, indent=2)}")
 
     return {
         "original_query": original_query,

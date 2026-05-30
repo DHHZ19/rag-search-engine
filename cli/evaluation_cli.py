@@ -24,7 +24,7 @@ def main() -> None:
         print(f"- Query: {r['query']}")
         print(f"- Precision@{limit}: {precision:.4f}")
         print(f"- Recall@{limit}: {r['recall']:.4f}")
-        print(f"- Recall@{limit}: {r['f1_score']:.4f}")
+        print(f"- F1 Score: {r['f1_score']:.4f}")
         print(f"- Retrieved: {r['retrieved']}")
         print(f"- Relevant: {r['relevant']}")
         print()

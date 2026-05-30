@@ -1,5 +1,6 @@
 import argparse
 
+from evaluation import eval_results
 from hybrid_search import (
     normalize_scores,
     rrf_search_command,
@@ -56,6 +57,11 @@ def main() -> None:
     )
     rrf_parser.add_argument(
         "--limit", type=int, default=5, help="Number of results to return (default=5)"
+    )
+    rrf_parser.add_argument(
+        "--evaluate",
+        action="store_true",
+        help="Add an evaluation to the output",
     )
 
     args = parser.parse_args()
@@ -124,6 +130,10 @@ def main() -> None:
                     print(f"   {', '.join(ranks)}")
                 print(f"   {res['document'][:100]}...")
                 print()
+
+            if args.evaluate:
+                eval_results(result)
+
         case _:
             parser.print_help()
 
