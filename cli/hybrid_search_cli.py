@@ -1,67 +1,70 @@
 import argparse
 
 from hybrid_search import (
-    HybridSearch,
+    normalize_scores,
     rrf_search_command,
     weighted_search_command,
 )
-from query_enhancement import enhance_query
-from search_utils import load_movies
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Hybrid Search CLI")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    normalize = subparsers.add_parser("normalize", help="Search movies using BM25")
-    normalize.add_argument(
-        "normalize", nargs="+", type=float, help="One or more numbers"
+    normalize_parser = subparsers.add_parser(
+        "normalize", help="Normalize a list of scores"
+    )
+    normalize_parser.add_argument(
+        "scores", nargs="+", type=float, help="List of scores to normalize"
     )
 
-    weighted_search = subparsers.add_parser(
-        "weighted-search", help="Search movies using BM25"
+    weighted_parser = subparsers.add_parser(
+        "weighted-search", help="Perform weighted hybrid search"
     )
-    weighted_search.add_argument("query", type=str, help="Must Enter a Query")
-    weighted_search.add_argument(
-        "--alpha", type=float, help="Alpha how much weight you want on a keyword search"
+    weighted_parser.add_argument("query", type=str, help="Search query")
+    weighted_parser.add_argument(
+        "--alpha",
+        type=float,
+        default=0.5,
+        help="Weight for BM25 vs semantic (0=all semantic, 1=all BM25, default=0.5)",
     )
-    weighted_search.add_argument("--limit", type=int, default=5, help="the limit")
+    weighted_parser.add_argument(
+        "--limit", type=int, default=5, help="Number of results to return (default=5)"
+    )
 
-    rrf_search = subparsers.add_parser(
-        "rrf-search",
-        help="rrf search used for searching and adds the scores of the semantic search and keyword search together using Reciprocal rank fusion",
+    rrf_parser = subparsers.add_parser(
+        "rrf-search", help="Perform Reciprocal Rank Fusion search"
     )
-    rrf_search.add_argument("query", type=str, help="Must Enter a Query")
-    rrf_search.add_argument(
-        "-k", type=int, default=60, help="enter k paramater defaults to 60"
+    rrf_parser.add_argument("query", type=str, help="Search query")
+    rrf_parser.add_argument(
+        "-k",
+        type=int,
+        default=60,
+        help="RRF k parameter controlling weight distribution (default=60)",
     )
-    rrf_search.add_argument(
-        "--limit", type=int, default=5, help="Enter the limit defaults to 5"
-    )
-    rrf_search.add_argument(
+    rrf_parser.add_argument(
         "--enhance",
         type=str,
-        choices=["spell", "rewrite", "expand"],
+        choices=["spell", "expand", "rewrite"],
         help="Query enhancement method",
     )
-    rrf_search.add_argument(
+    rrf_parser.add_argument(
         "--rerank-method",
         type=str,
         choices=["individual", "batch", "cross_encoder"],
-        required=False,
-        help="enter rerank method",
+        help="Re-ranking method",
+    )
+    rrf_parser.add_argument(
+        "--limit", type=int, default=5, help="Number of results to return (default=5)"
     )
 
     args = parser.parse_args()
 
     match args.command:
         case "normalize":
-            scores = args.normalize
-            movies = load_movies()
-            hs = HybridSearch(movies)
-
-            print(hs.normalize_scores(scores))
-
+            normalized = normalize_scores(args.scores)
+            for score in normalized:
+                print(f"* {score:.4f}")
         case "weighted-search":
             result = weighted_search_command(args.query, args.alpha, args.limit)
 
@@ -81,38 +84,46 @@ def main() -> None:
                     )
                 print(f"   {res['document'][:100]}...")
                 print()
-
         case "rrf-search":
-            query = args.query
-            k = args.k
-            limit = args.limit
-            enhance = args.enhance
-            rerank_method = args.rerank_method
-            METHOD = enhance
-            QUERY = query
-            ENHANCED_QUERY = ""
-            DEFULT_LIMIT = limit
+            result = rrf_search_command(
+                args.query, args.k, args.enhance, args.rerank_method, args.limit
+            )
 
-            if rerank_method:
-                limit = limit * 5
-
-            query = enhance_query(QUERY, enhance)
-            ENHANCED_QUERY = query
-
-            print(f"Enhanced query ({METHOD}): '{QUERY}' -> '{ENHANCED_QUERY}'\n")
-
-            res = rrf_search_command(query, k, limit, rerank_method)
-
-            for i, doc_score in enumerate(res[:DEFULT_LIMIT], start=1):
-                metadata = doc_score.get("metadata", {})
-                print(f"{i}. {doc_score['title']}")
-                print(f"Re-rank Score: {doc_score['rerank_score']}")
-                print(f"RRF Score: {doc_score['score']}")
+            if result["enhanced_query"]:
                 print(
-                    f"BM25 Rank: {metadata['bm25_score']} Semantic Rank: {metadata['semantic_score']}"
+                    f"Enhanced query ({result['enhance_method']}): '{result['original_query']}' -> '{result['enhanced_query']}'\n"
                 )
-                print()
 
+            if result["reranked"]:
+                print(
+                    f"Re-ranking top {len(result['results'])} results using {result['rerank_method']} method...\n"
+                )
+
+            print(
+                f"Reciprocal Rank Fusion Results for '{result['query']}' (k={result['k']}):"
+            )
+
+            for i, res in enumerate(result["results"], 1):
+                print(f"{i}. {res['title']}")
+                if "individual_score" in res:
+                    print(f"   Re-rank Score: {res.get('individual_score', 0):.3f}/10")
+                if "batch_rank" in res:
+                    print(f"   Re-rank Rank: {res.get('batch_rank', 0)}")
+                if "crossencoder_score" in res:
+                    print(
+                        f"   Cross Encoder Score: {res.get('crossencoder_score', 0):.3f}"
+                    )
+                print(f"   RRF Score: {res.get('score', 0):.3f}")
+                metadata = res.get("metadata", {})
+                ranks = []
+                if metadata.get("bm25_rank"):
+                    ranks.append(f"BM25 Rank: {metadata['bm25_rank']}")
+                if metadata.get("semantic_rank"):
+                    ranks.append(f"Semantic Rank: {metadata['semantic_rank']}")
+                if ranks:
+                    print(f"   {', '.join(ranks)}")
+                print(f"   {res['document'][:100]}...")
+                print()
         case _:
             parser.print_help()
 
