@@ -39,6 +39,17 @@ def main() -> None:
         "--limit", type=int, required=False, help="limit the search"
     )
 
+    question_parser = subparsers.add_parser(
+        "question",
+        help="Perform RAG (search + answers question directly based of search results)",
+    )
+    question_parser.add_argument(
+        "question", type=str, help="question about the movies for hoopla users"
+    )
+    question_parser.add_argument(
+        "--limit", type=int, default=5, required=False, help="limit the search"
+    )
+
     args = parser.parse_args()
 
     match args.command:
@@ -133,8 +144,42 @@ def main() -> None:
                 model="gemma-4-31b-it", contents=prompt
             )
 
-            print("Search Results: ")
             for doc in documents:
+                print("Search Results: ")
+                print(f"  - {doc['title']}")
+
+            print("LLM Answer: ")
+            print(response.text)
+
+        case "question":
+            question = args.question
+            limit = args.limit
+            movies = load_movies()
+            hy = HybridSearch(movies)
+
+            docs = hy.rrf_search(question, limit=limit)
+
+            prompt = f"""Answer the user's question based on the provided movies that are available on Hoopla, a streaming service.
+
+            Question: {question}
+
+            Documents:
+            {docs}
+
+            Instructions:
+            - Answer questions directly and concisely
+            - Be casual and conversational
+            - Don't be cringe or hype-y
+            - Talk like a normal person would in a chat conversation
+
+            Answer:"""
+
+            response = client.models.generate_content(
+                model="gemma-4-31b-it", contents=prompt
+            )
+
+            print("Search Results: ")
+            for doc in docs:
                 print(f"  - {doc['title']}")
 
             print("LLM Answer: ")
