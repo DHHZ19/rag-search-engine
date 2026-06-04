@@ -40,6 +40,8 @@ Record commands here as the exercise progresses.
 | 2026-05-23 | `PYTHONPATH=cli uv run python -c 'from search_utils import load_movies; movies=load_movies(); indexes=[1176,1177,1178,3313,3314,3315,4431,4432,4433]; print([(i, movies[i]["id"], movies[i]["title"]) for i in indexes])'` | Checked neighboring movies around the expected titles | Completed; several printed wrong titles are immediately before the expected titles in the movie list |
 | 2026-05-30 | `uv sync` | Set up the project virtual environment before checking the hybrid-search CLI | Completed; dependencies were already installed |
 | 2026-05-30 | `uv run cli/hybrid_search_cli.py rrf-search --help` | Verified that `--evaluate` is parsed as a boolean flag with no extra value required | Completed; help now shows `[--evaluate]` instead of `[--evaluate EVALUATE]` |
+| 2026-06-04 | `uv sync` | Set up the project virtual environment before editing and checking the image-description CLI | Completed; dependencies were already installed |
+| 2026-06-04 | `uv run cli/describe_image_cli.py --help` | Verified that the image-description CLI accepts `--query` and `--image` directly without the `rag` subcommand | Completed; help shows `describe_image_cli.py --query QUERY --image IMAGE` |
 
 ## Change Log
 
@@ -55,6 +57,7 @@ Record meaningful repository changes here.
 | 2026-05-19 | `README.md` | Logged the semantic-search CLI debugging steps | To preserve what failed, what changed, and how the fix was verified |
 | 2026-05-23 | `README.md` | Logged the chunked semantic search debugging commands and observations | To keep the learning record current while investigating the mapping issue |
 | 2026-05-30 | `cli/hybrid_search_cli.py`, `README.md` | Changed `--evaluate` from a value-taking boolean option to an `argparse` `store_true` flag and logged the verification | So `--evaluate` works like a normal CLI flag: absent means `False`, present means `True` |
+| 2026-06-04 | `cli/describe_image_cli.py`, `README.md` | Removed the `rag` subcommand from the image-description CLI and made `--query` and `--image` top-level options | So the command can be run without typing an extra parser command before the options |
 
 ## Cleanup Notes
 
