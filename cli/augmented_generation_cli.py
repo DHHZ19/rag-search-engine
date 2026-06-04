@@ -24,10 +24,18 @@ def main() -> None:
     rag_parser.add_argument("query", type=str, help="Search query for RAG")
 
     sumarize_parser = subparsers.add_parser(
-        "summarize", help="Perform search and then summarize the results"
+        "summarize", help="Perform RAG (search + summarize results)"
     )
     sumarize_parser.add_argument("query", type=str, help="Search query for RAG")
     sumarize_parser.add_argument(
+        "--limit", type=int, required=False, help="limit the search"
+    )
+
+    citation_parser = subparsers.add_parser(
+        "citations", help="Perform RAG (search + summarize results with citations)"
+    )
+    citation_parser.add_argument("query", type=str, help="Search query for RAG")
+    citation_parser.add_argument(
         "--limit", type=int, required=False, help="limit the search"
     )
 
@@ -92,6 +100,44 @@ def main() -> None:
             for doc in results:
                 print(f"    - {doc['title']}\n")
             print("LLM Summary:")
+            print(response.text)
+        case "citations":
+            query = args.query
+            limit = args.limit
+
+            movies = load_movies()
+            hy = HybridSearch(movies)
+
+            documents = hy.rrf_search(query)
+
+            prompt = f"""Answer the query below and give information based on the provided documents.
+
+            The answer should be tailored to users of Hoopla, a movie streaming service.
+            If not enough information is available to provide a good answer, say so, but give the best answer possible while citing the sources available.
+
+            Query: {query}
+
+            Documents:
+            {documents}
+
+            Instructions:
+            - Provide a comprehensive answer that addresses the query
+            - Cite sources in the format [1], [2], etc. when referencing information
+            - If sources disagree, mention the different viewpoints
+            - If the answer isn't in the provided documents, say "I don't have enough information"
+            - Be direct and informative
+
+            Answer:"""
+
+            response = client.models.generate_content(
+                model="gemma-4-31b-it", contents=prompt
+            )
+
+            print("Search Results: ")
+            for doc in documents:
+                print(f"  - {doc['title']}")
+
+            print("LLM Answer: ")
             print(response.text)
 
         case _:
