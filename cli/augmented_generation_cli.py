@@ -23,6 +23,14 @@ def main() -> None:
     )
     rag_parser.add_argument("query", type=str, help="Search query for RAG")
 
+    sumarize_parser = subparsers.add_parser(
+        "summarize", help="Perform search and then summarize the results"
+    )
+    sumarize_parser.add_argument("query", type=str, help="Search query for RAG")
+    sumarize_parser.add_argument(
+        "--limit", type=int, required=False, help="limit the search"
+    )
+
     args = parser.parse_args()
 
     match args.command:
@@ -53,6 +61,39 @@ def main() -> None:
 
             print("RAG Response:")
             print(response.text)
+
+        case "summarize":
+            query = args.query
+
+            movies = load_movies()
+            hy = HybridSearch(movies)
+
+            results = hy.rrf_search(query)
+
+            prompt = f"""Provide information useful to the query below by synthesizing data from multiple search results in detail.
+
+            The goal is to provide comprehensive information so that users know what their options are.
+            Your response should be information-dense and concise, with several key pieces of information about the genre, plot, etc. of each movie.
+
+            This should be tailored to Hoopla users. Hoopla is a movie streaming service.
+
+            Query: {query}
+
+            Search results:
+            {results}
+
+            Provide a comprehensive 3–4 sentence answer that combines information from multiple sources:"""
+
+            response = client.models.generate_content(
+                model="gemma-4-31b-it", contents=prompt
+            )
+
+            print("Search Results:")
+            for doc in results:
+                print(f"    - {doc['title']}\n")
+            print("LLM Summary:")
+            print(response.text)
+
         case _:
             parser.print_help()
 
